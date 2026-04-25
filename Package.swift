@@ -12,7 +12,12 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/krzyzanowskim/STTextKitPlus", from: "0.2.0"),
+        // Use the local sibling so Macintora's project.pbxproj-level local
+        // package reference and this transitive dependency resolve to the
+        // same package identity. Otherwise SwiftPM warns about a conflicting
+        // identity ('github.com/krzyzanowskim/sttextkitplus' vs
+        // '/users/ilia/developer/sttextkitplus').
+        .package(path: "../STTextKitPlus"),
         .package(url: "https://github.com/krzyzanowskim/CoreTextSwift", from: "0.2.0")
     ],
     targets: [
