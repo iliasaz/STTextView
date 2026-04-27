@@ -1478,12 +1478,39 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
     func layoutViewport() {
         // Convergence loop - max 5 iterations
-        // If layout triggers changes that require re-layout, needsRelayout is set
+        //
+        // Two signals can drive another iteration:
+        //   1) `needsRelayout`: code reached during this pass set the flag,
+        //      explicitly asking for another round.
+        //   2) The viewport range is still growing: NSTextViewportLayoutController
+        //      sometimes returns a partial viewport range on the first call
+        //      after a programmatic scroll (e.g. `scrollRangeToVisible`
+        //      triggered by `moveToBeginningOfDocument`), where it only lays
+        //      out the line at the new anchor instead of filling the entire
+        //      visible bounds. A subsequent call against the same state
+        //      extends the range to cover the full bounds. `needsRelayout`
+        //      doesn't catch this because nothing during the partial pass
+        //      sets it. Without this, Cmd-End → Cmd-Home on a long
+        //      word-wrapped document leaves `viewportRange` covering only the
+        //      first line, and the editor renders blank below it. Test
+        //      coverage: `CmdHomeBlankingTests`.
         var iterations = 5
+        var previousRangeLength: Int? = nil
+        let controller = textLayoutManager.textViewportLayoutController
+
         while iterations > 0 {
             needsRelayout = false
-            textLayoutManager.textViewportLayoutController.layoutViewport()
-            if !needsRelayout { break }
+            controller.layoutViewport()
+
+            // Stop only once both: nothing requested another relayout, and
+            // the viewport range is no longer growing.
+            let currentLength = controller.viewportRange.map {
+                NSRange($0, in: textContentManager).length
+            }
+            let rangeStable = (currentLength == previousRangeLength)
+            if !needsRelayout && rangeStable { break }
+
+            previousRangeLength = currentLength
             iterations -= 1
         }
 
