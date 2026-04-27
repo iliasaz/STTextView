@@ -871,7 +871,25 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
         if let scrollView {
             NotificationCenter.default.addObserver(self, selector: #selector(didLiveScrollNotification(_:)), name: NSScrollView.didLiveScrollNotification, object: scrollView)
+
+            // Observe clip-view bounds changes so STTextView re-runs layout
+            // after every scroll-position change — including programmatic
+            // ones like `scrollRangeToVisible` triggered by selection-driven
+            // moves, and the initial scroll/frame settling that follows
+            // `setString` while the host (e.g. a SwiftUI hosting view) is
+            // still resolving its layout. `didLiveScrollNotification` only
+            // covers user scrolling and doesn't fire here. Without this
+            // observer, layoutViewport()'s convergence loop never re-runs
+            // after the natural display cycle has already passed, leaving
+            // the document with a viewportRange computed against the wrong
+            // frame.
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(clipViewBoundsDidChangeNotification(_:)), name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         }
+    }
+
+    @objc private func clipViewBoundsDidChangeNotification(_ notification: Notification) {
+        setNeedsLayoutSafe()
     }
 
     override open func viewDidMoveToWindow() {

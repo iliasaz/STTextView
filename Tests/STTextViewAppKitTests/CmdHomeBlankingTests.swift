@@ -73,6 +73,74 @@ final class CmdHomeBlankingTests: XCTestCase {
         )
     }
 
+    /// Initial-load reproducer: just set a long string and let the runloop
+    /// flush — no programmatic moves, no forced `displayIfNeeded()` between
+    /// `setString` and the assertion. Mimics what happens when a host app
+    /// drops STTextView into a SwiftUI hosting view and seeds content during
+    /// `makeNSView`. If this fails while the move-driven test passes, the
+    /// bug is on the initial paint path, not on the scroll path.
+    func testInitialViewportCoversVisibleAreaAfterSetString() throws {
+        let host = makeHost(wordWrap: true, viewportSize: CGSize(width: 600, height: 400))
+        let textView = host.textView
+        textView.setString(Self.longText(lineCount: 500))
+        // Park the cursor and scroll at the top — match a fresh-open scenario.
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.scroll(.zero)
+
+        // Flush the runloop the way the real app does — without forcing layout
+        // via `host.displayIfNeeded()` first.
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        let viewport = try XCTUnwrap(
+            textView.textLayoutManager.textViewportLayoutController.viewportRange
+        )
+        let nsRange = NSRange(viewport, in: textView.textContentManager)
+
+        XCTAssertEqual(nsRange.location, 0, "initial viewport should start at the top of the document")
+        XCTAssertGreaterThan(
+            nsRange.length, 100,
+            "initial viewport over a 500-line wrapped doc should cover much more than a single line — currently \(nsRange.length) chars"
+        )
+    }
+
+    /// Real-app reproduction: spin the runloop instead of forcing layout via
+    /// `displayIfNeeded()` between the moves. In the host app there's no
+    /// explicit display call between Cmd-End/Home and the next paint —
+    /// AppKit's runloop has to drive the layout. If this test fails while
+    /// `testViewportRangeCoversVisibleTopAfterHome` passes, the bug lives in
+    /// the layout-trigger path (e.g. STTextView not observing clip-view
+    /// bounds changes) rather than in `layoutViewport()` itself.
+    func testViewportRecoversWithoutForcedDisplay() throws {
+        let host = makeHost(wordWrap: true, viewportSize: CGSize(width: 600, height: 400))
+        let textView = host.textView
+        textView.setString(Self.longText(lineCount: 500))
+        host.displayIfNeeded()
+        textView.scroll(.zero)
+        textView.layoutViewport()
+
+        let initialNSRange = NSRange(
+            try XCTUnwrap(textView.textLayoutManager.textViewportLayoutController.viewportRange),
+            in: textView.textContentManager
+        )
+
+        textView.moveToEndOfDocument(nil)
+        // Spin the runloop briefly — same shape as the real app.
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        textView.moveToBeginningOfDocument(nil)
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        let homeNSRange = NSRange(
+            try XCTUnwrap(textView.textLayoutManager.textViewportLayoutController.viewportRange),
+            in: textView.textContentManager
+        )
+        XCTAssertEqual(homeNSRange.location, 0)
+        XCTAssertEqual(
+            homeNSRange.length, initialNSRange.length, accuracy: 4,
+            "after Cmd-Home (without forced displayIfNeeded) the viewport span should match the initial top-of-doc viewport span — i.e. STTextView must trigger layoutViewport() naturally on scroll-position changes"
+        )
+    }
+
     // MARK: - Currently passing — narrows the cause.
 
     /// Confirms the wrap state isn't flipping. `isHorizontallyResizable` and
