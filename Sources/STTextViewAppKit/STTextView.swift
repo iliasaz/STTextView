@@ -1603,7 +1603,21 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
             setFrameSize(CGSize(width: frame.width, height: lastLineMaxY))
         }
 
-        let offset = frame.height - suggestedAnchor
+        // Use `lastLineMaxY` (the value we just set the frame to) rather than
+        // `frame.height` here. AppKit can fire `prepareContent` synchronously
+        // from inside `setFrameSize` above when the new frame can no longer
+        // contain the clip view's visibleRect (e.g. Cmd-Home from the bottom
+        // of a long document: shrinking to 16pt forces an immediate scroll
+        // back to y=0, which triggers prepareContent → layoutViewport →
+        // updateContentSizeIfNeeded → setFrameSize back to the full doc
+        // height). When that happens, `frame.height` here no longer equals
+        // `lastLineMaxY`, and `offset` blows up to ≈doc-height instead of
+        // ≈line-height — `adjustViewport(byVerticalOffset:)` then shifts the
+        // viewport content thousands of points, leaving only the very first
+        // fragment visible. Computing the offset from `lastLineMaxY` is
+        // robust against this re-entrance.
+        let offset = lastLineMaxY - suggestedAnchor
+        cmdHomeLogger.notice("relocateViewport offset=\(offset, privacy: .public) (lastLineMaxY=\(lastLineMaxY, privacy: .public) - suggestedAnchor=\(suggestedAnchor, privacy: .public)) frameAfterResize=\(self.frame.height, privacy: .public)")
         if !offset.isAlmostZero() {
             textViewportLayoutController.adjustViewport(byVerticalOffset: -offset)
         }
