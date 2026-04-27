@@ -999,7 +999,7 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func prepareContent(in rect: NSRect) {
-        cmdHomeLogger.notice("prepareContent enter rect=\(rect.debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
+        cmdHomeLogger.notice("prepareContent enter rect=\(rect.debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentCount=\(self.contentViewportView.subviews.count, privacy: .public)")
         var rect = rect
 
         // Add a modest upward overdraw band so small viewport shifts can stay
@@ -1026,7 +1026,7 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
         // re-converge. The convergence loop in `layoutViewport()` is a
         // no-op when nothing is left to lay out.
         layoutViewport()
-        cmdHomeLogger.notice("prepareContent exit preparedContentRect=\(self.preparedContentRect.debugDescription, privacy: .public) viewportRange=\(self.textLayoutManager.textViewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public)")
+        cmdHomeLogger.notice("prepareContent exit preparedContentRect=\(self.preparedContentRect.debugDescription, privacy: .public) viewportRange=\(self.textLayoutManager.textViewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentCount=\(self.contentViewportView.subviews.count, privacy: .public)")
     }
 
     /// The current selection range of the text view.
@@ -1471,7 +1471,7 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func setFrameSize(_ newSize: NSSize) {
-        cmdHomeLogger.notice("setFrameSize old=\(self.frame.size.debugDescription, privacy: .public) new=\(newSize.debugDescription, privacy: .public) inLayout=\(self.inLayout, privacy: .public)")
+        cmdHomeLogger.notice("setFrameSize old=\(self.frame.size.debugDescription, privacy: .public) new=\(newSize.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) inLayout=\(self.inLayout, privacy: .public)")
         super.setFrameSize(newSize)
 
         // contentView should always fill the entire STTextView
@@ -1479,6 +1479,7 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
         contentView.frame.size = newSize
 
         updateTextContainerSize(proposedSize: newSize)
+        cmdHomeLogger.notice("setFrameSize after contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentViewCount=\(self.contentViewportView.subviews.count, privacy: .public)")
 
         if inLayout {
             needsRelayout = true

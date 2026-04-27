@@ -70,7 +70,8 @@ extension STTextView {
         rect.origin.x -= gutterView?.frame.width ?? 0
         rect.size.width += gutterView?.frame.width ?? 0
         let result = contentView.scrollToVisible(rect)
-        cmdHomeLogger.notice("scrollToVisible exit scrolled=\(result, privacy: .public) targetRect=\(rect.debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) viewportRange=\(viewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public)")
+        let fragmentFrames = contentViewportView.subviews.prefix(5).map { $0.frame.debugDescription }.joined(separator: ", ")
+        cmdHomeLogger.notice("scrollToVisible exit scrolled=\(result, privacy: .public) targetRect=\(rect.debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) viewportRange=\(viewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentCount=\(self.contentViewportView.subviews.count, privacy: .public) firstFragments=[\(fragmentFrames, privacy: .public)]")
         return result
     }
 
