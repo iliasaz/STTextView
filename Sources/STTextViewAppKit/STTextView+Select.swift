@@ -61,6 +61,14 @@ extension STTextView {
         postLayoutAction = { [weak self] in
             guard let self, let textRange = textLayoutManager.textSelections.last?.textRanges.last else { return }
             scrollToVisible(textRange, type: .standard)
+            // `scrollToVisible` shifts the clip-view bounds but doesn't, on
+            // its own, schedule another layout pass on STTextView. Without
+            // a follow-up pass, `layoutViewport()` doesn't re-run against
+            // the new bounds, and a programmatic move that scrolls a wide
+            // distance (e.g. Cmd-Home from the end of a long word-wrapped
+            // document) leaves the viewport anchored where it was — only
+            // the first fragment of the now-visible region renders.
+            setNeedsLayoutSafe()
         }
         needsDisplay = true
     }
@@ -81,6 +89,14 @@ extension STTextView {
         postLayoutAction = { [weak self] in
             guard let self, let textRange = textLayoutManager.textSelections.last?.textRanges.last else { return }
             scrollToVisible(textRange, type: .standard)
+            // `scrollToVisible` shifts the clip-view bounds but doesn't, on
+            // its own, schedule another layout pass on STTextView. Without
+            // a follow-up pass, `layoutViewport()` doesn't re-run against
+            // the new bounds, and a programmatic move that scrolls a wide
+            // distance (e.g. Cmd-Home from the end of a long word-wrapped
+            // document) leaves the viewport anchored where it was — only
+            // the first fragment of the now-visible region renders.
+            setNeedsLayoutSafe()
         }
         needsDisplay = true
     }
@@ -101,6 +117,14 @@ extension STTextView {
         postLayoutAction = { [weak self] in
             guard let self, let textRange = textLayoutManager.textSelections.last?.textRanges.last else { return }
             scrollToVisible(textRange, type: .standard)
+            // `scrollToVisible` shifts the clip-view bounds but doesn't, on
+            // its own, schedule another layout pass on STTextView. Without
+            // a follow-up pass, `layoutViewport()` doesn't re-run against
+            // the new bounds, and a programmatic move that scrolls a wide
+            // distance (e.g. Cmd-Home from the end of a long word-wrapped
+            // document) leaves the viewport anchored where it was — only
+            // the first fragment of the now-visible region renders.
+            setNeedsLayoutSafe()
         }
         needsDisplay = true
 
@@ -470,6 +494,14 @@ extension STTextView {
         postLayoutAction = { [weak self] in
             guard let self, let textRange = textLayoutManager.textSelections.last?.textRanges.last else { return }
             scrollToVisible(textRange, type: .standard)
+            // `scrollToVisible` shifts the clip-view bounds but doesn't, on
+            // its own, schedule another layout pass on STTextView. Without
+            // a follow-up pass, `layoutViewport()` doesn't re-run against
+            // the new bounds, and a programmatic move that scrolls a wide
+            // distance (e.g. Cmd-Home from the end of a long word-wrapped
+            // document) leaves the viewport anchored where it was — only
+            // the first fragment of the now-visible region renders.
+            setNeedsLayoutSafe()
         }
         needsDisplay = true
     }
