@@ -999,7 +999,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func prepareContent(in rect: NSRect) {
-        cmdHomeLogger.notice("prepareContent enter rect=\(rect.debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentCount=\(self.contentViewportView.subviews.count, privacy: .public)")
         var rect = rect
 
         // Add a modest upward overdraw band so small viewport shifts can stay
@@ -1026,7 +1025,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
         // re-converge. The convergence loop in `layoutViewport()` is a
         // no-op when nothing is left to lay out.
         layoutViewport()
-        cmdHomeLogger.notice("prepareContent exit preparedContentRect=\(self.preparedContentRect.debugDescription, privacy: .public) viewportRange=\(self.textLayoutManager.textViewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentCount=\(self.contentViewportView.subviews.count, privacy: .public)")
     }
 
     /// The current selection range of the text view.
@@ -1339,16 +1337,13 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func layout() {
-        cmdHomeLogger.notice("layout enter frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) hasPostLayoutAction=\(self.postLayoutAction != nil, privacy: .public)")
         super.layout()
         layoutText()
 
         if let action = postLayoutAction {
             postLayoutAction = nil
-            cmdHomeLogger.notice("layout invoking postLayoutAction")
             action()
         }
-        cmdHomeLogger.notice("layout exit frame=\(self.frame.debugDescription, privacy: .public)")
     }
 
     /// Performs text layout including container sizing, viewport layout, and related updates.
@@ -1364,13 +1359,9 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
     func setNeedsLayoutSafe() {
         if inLayout {
-            cmdHomeLogger.notice("setNeedsLayoutSafe → needsRelayout=true (inLayout)")
             needsRelayout = true
         } else if !needsLayout, !inLiveResize {
-            cmdHomeLogger.notice("setNeedsLayoutSafe → needsLayout=true")
             needsLayout = true
-        } else {
-            cmdHomeLogger.notice("setNeedsLayoutSafe noop needsLayout=\(self.needsLayout, privacy: .public) inLiveResize=\(self.inLiveResize, privacy: .public)")
         }
     }
 
@@ -1471,22 +1462,13 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func setFrameSize(_ newSize: NSSize) {
-        cmdHomeLogger.notice("setFrameSize old=\(self.frame.size.debugDescription, privacy: .public) new=\(newSize.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) inLayout=\(self.inLayout, privacy: .public)")
         super.setFrameSize(newSize)
 
-        // `super.setFrameSize` can synchronously fire `prepareContent` (when
-        // the new bounds can't contain the clip view's visibleRect), which
-        // may recursively call back into `setFrameSize` with a *different*
-        // size (e.g. updateContentSizeIfNeeded re-growing the frame after a
-        // relocateViewport-driven shrink). In that case `self.frame.size`
-        // here no longer matches our `newSize` parameter — use the current
-        // frame instead, otherwise we'd stomp the recursive call's result
-        // and leave `contentView`/`contentViewportView` clamped to the
-        // intermediate (small) size while the textView itself stays big.
-        // That mismatch clips fragment views to the intermediate height,
-        // which manifested as the Cmd-End → Cmd-Home blanking bug: only
-        // the first 16pt of fragments rendered, because contentViewportView
-        // had been pinned to 16pt while the textView was 7792pt tall.
+        // `super.setFrameSize` can synchronously fire `prepareContent`, which
+        // may recursively call back into `setFrameSize` with a different
+        // size. In that case `self.frame.size` no longer matches `newSize`;
+        // use the current frame so we don't stomp the recursive call's
+        // result and leave `contentView` pinned to the intermediate size.
         let effectiveSize = frame.size
 
         // contentView should always fill the entire STTextView
@@ -1494,7 +1476,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
         contentView.frame.size = effectiveSize
 
         updateTextContainerSize(proposedSize: effectiveSize)
-        cmdHomeLogger.notice("setFrameSize after newSize=\(newSize.debugDescription, privacy: .public) effectiveSize=\(effectiveSize.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentViewCount=\(self.contentViewportView.subviews.count, privacy: .public)")
 
         if inLayout {
             needsRelayout = true
@@ -1523,8 +1504,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
         var previousRangeLength: Int? = nil
         let controller = textLayoutManager.textViewportLayoutController
 
-        cmdHomeLogger.notice("layoutViewport enter frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
-
         while iterations > 0 {
             needsRelayout = false
             controller.layoutViewport()
@@ -1534,15 +1513,12 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
             let currentLength = controller.viewportRange.map {
                 NSRange($0, in: textContentManager).length
             }
-            cmdHomeLogger.notice("layoutViewport iter=\(5 - iterations, privacy: .public) viewportRange=\(controller.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public) needsRelayout=\(self.needsRelayout, privacy: .public)")
             let rangeStable = (currentLength == previousRangeLength)
             if !needsRelayout && rangeStable { break }
 
             previousRangeLength = currentLength
             iterations -= 1
         }
-
-        cmdHomeLogger.notice("layoutViewport exit iterationsLeft=\(iterations, privacy: .public) finalViewport=\(controller.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public)")
 
         #if DEBUG
             if iterations == 0 {
@@ -1592,7 +1568,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
             options: .alignAllEdgesOutward
         )
 
-        cmdHomeLogger.notice("updateContentSizeIfNeeded estimated=\(estimatedSize.debugDescription, privacy: .public) currentFrame=\(self.frame.debugDescription, privacy: .public) newFrame=\(newFrame.debugDescription, privacy: .public) willResize=\(!newFrame.size.isAlmostEqual(to: self.frame.size), privacy: .public)")
         if !newFrame.size.isAlmostEqual(to: frame.size) {
             setFrameSize(newFrame.size)
         }
@@ -1600,8 +1575,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
     func relocateViewport(to location: NSTextLocation) {
         let textViewportLayoutController = textLayoutManager.textViewportLayoutController
-
-        cmdHomeLogger.notice("relocateViewport enter currentFrame=\(self.frame.debugDescription, privacy: .public)")
 
         let suggestedAnchor = textViewportLayoutController.relocateViewport(to: location)
 
@@ -1613,31 +1586,19 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
             return true
         }
 
-        cmdHomeLogger.notice("relocateViewport suggestedAnchor=\(suggestedAnchor, privacy: .public) lastLineMaxY=\(lastLineMaxY, privacy: .public) currentFrameHeight=\(self.frame.height, privacy: .public)")
-
         if !lastLineMaxY.isAlmostEqual(to: frame.height) {
             setFrameSize(CGSize(width: frame.width, height: lastLineMaxY))
         }
 
-        // Use `lastLineMaxY` (the value we just set the frame to) rather than
-        // `frame.height` here. AppKit can fire `prepareContent` synchronously
-        // from inside `setFrameSize` above when the new frame can no longer
-        // contain the clip view's visibleRect (e.g. Cmd-Home from the bottom
-        // of a long document: shrinking to 16pt forces an immediate scroll
-        // back to y=0, which triggers prepareContent → layoutViewport →
-        // updateContentSizeIfNeeded → setFrameSize back to the full doc
-        // height). When that happens, `frame.height` here no longer equals
-        // `lastLineMaxY`, and `offset` blows up to ≈doc-height instead of
-        // ≈line-height — `adjustViewport(byVerticalOffset:)` then shifts the
-        // viewport content thousands of points, leaving only the very first
-        // fragment visible. Computing the offset from `lastLineMaxY` is
-        // robust against this re-entrance.
+        // Compute `offset` from `lastLineMaxY` rather than `frame.height`:
+        // the `setFrameSize` above can re-enter `prepareContent` and grow
+        // the frame back to the full document height before we get here,
+        // which would inflate `offset` to ≈doc-height and `adjustViewport`
+        // would then shift the viewport thousands of points off-screen.
         let offset = lastLineMaxY - suggestedAnchor
-        cmdHomeLogger.notice("relocateViewport offset=\(offset, privacy: .public) (lastLineMaxY=\(lastLineMaxY, privacy: .public) - suggestedAnchor=\(suggestedAnchor, privacy: .public)) frameAfterResize=\(self.frame.height, privacy: .public)")
         if !offset.isAlmostZero() {
             textViewportLayoutController.adjustViewport(byVerticalOffset: -offset)
         }
-        cmdHomeLogger.notice("relocateViewport exit frame=\(self.frame.debugDescription, privacy: .public) viewportRange=\(textViewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public)")
     }
 
     open func scrollRangeToVisible(_ range: NSRange) {

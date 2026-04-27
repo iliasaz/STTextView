@@ -437,7 +437,6 @@ extension STTextView {
     }
 
     override open func moveToBeginningOfDocument(_ sender: Any?) {
-        cmdHomeLogger.notice("moveToBeginningOfDocument frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
         setTextSelections(
             direction: .backward,
             destination: .document,
@@ -456,7 +455,6 @@ extension STTextView {
     }
 
     override open func moveToEndOfDocument(_ sender: Any?) {
-        cmdHomeLogger.notice("moveToEndOfDocument frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
         setTextSelections(
             direction: .forward,
             destination: .document,
@@ -493,11 +491,8 @@ extension STTextView {
         }
 
         updateTypingAttributes()
-        let selectionRange = textLayoutManager.textSelections.last?.textRanges.last.map { NSRange($0, in: textContentManager).debugDescription } ?? "nil"
-        cmdHomeLogger.notice("setTextSelections destination=\(String(describing: destination), privacy: .public) selection=\(selectionRange, privacy: .public) — scheduling postLayoutAction")
         postLayoutAction = { [weak self] in
             guard let self, let textRange = textLayoutManager.textSelections.last?.textRanges.last else { return }
-            cmdHomeLogger.notice("postLayoutAction enter frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
             scrollToVisible(textRange, type: .standard)
             // `scrollToVisible` shifts the clip-view bounds but doesn't, on
             // its own, schedule another layout pass on STTextView. Without
@@ -507,7 +502,6 @@ extension STTextView {
             // document) leaves the viewport anchored where it was — only
             // the first fragment of the now-visible region renders.
             setNeedsLayoutSafe()
-            cmdHomeLogger.notice("postLayoutAction exit needsLayout=\(self.needsLayout, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
         }
         needsDisplay = true
     }

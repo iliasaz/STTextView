@@ -14,8 +14,6 @@ extension STTextView {
     func scrollToVisible(_ textRange: NSTextRange, type: NSTextLayoutManager.SegmentType) -> Bool {
         let viewportLayoutController = textLayoutManager.textViewportLayoutController
 
-        cmdHomeLogger.notice("scrollToVisible enter range=\(NSRange(textRange, in: self.textContentManager).debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) viewportRange=\(viewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public)")
-
         // Ensure layout for the target range before computing its rect
         textLayoutManager.ensureLayout(for: textRange)
 
@@ -32,8 +30,6 @@ extension STTextView {
             isInViewport = false
         }
 
-        cmdHomeLogger.notice("scrollToVisible isInViewport=\(isInViewport, privacy: .public)")
-
         if !isInViewport {
             // `relocateViewport(to:)` shrinks the textView's frame to the
             // bottom of the relocation anchor's line. When relocating to the
@@ -45,17 +41,13 @@ extension STTextView {
             // the subsequent `layoutViewport()` runs against the correct
             // height and lays out the entire visible area.
             relocateViewport(to: textRange.location)
-            cmdHomeLogger.notice("scrollToVisible after relocateViewport frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
             updateContentSizeIfNeeded()
-            cmdHomeLogger.notice("scrollToVisible after updateContentSize frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
             layoutViewport()
-            cmdHomeLogger.notice("scrollToVisible after layoutViewport viewportRange=\(viewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public) frame=\(self.frame.debugDescription, privacy: .public)")
         } else {
             updateContentSizeIfNeeded()
         }
 
         guard var rect = textLayoutManager.textSegmentFrame(in: textRange, type: type) else {
-            cmdHomeLogger.notice("scrollToVisible textSegmentFrame returned nil — abort")
             return false
         }
 
@@ -69,10 +61,7 @@ extension STTextView {
         // adjust rect to mimick it's size to include gutter overlay
         rect.origin.x -= gutterView?.frame.width ?? 0
         rect.size.width += gutterView?.frame.width ?? 0
-        let result = contentView.scrollToVisible(rect)
-        let fragmentFrames = contentViewportView.subviews.prefix(5).map { $0.frame.debugDescription }.joined(separator: ", ")
-        cmdHomeLogger.notice("scrollToVisible exit scrolled=\(result, privacy: .public) targetRect=\(rect.debugDescription, privacy: .public) frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public) viewportRange=\(viewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentCount=\(self.contentViewportView.subviews.count, privacy: .public) firstFragments=[\(fragmentFrames, privacy: .public)]")
-        return result
+        return contentView.scrollToVisible(rect)
     }
 
     override open func centerSelectionInVisibleArea(_ sender: Any?) {
@@ -121,21 +110,15 @@ extension STTextView {
     }
 
     override open func scrollToBeginningOfDocument(_ sender: Any?) {
-        cmdHomeLogger.notice("scrollToBeginningOfDocument enter frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
         relocateViewport(to: textLayoutManager.documentRange.location)
-        cmdHomeLogger.notice("scrollToBeginningOfDocument after relocateViewport frame=\(self.frame.debugDescription, privacy: .public)")
         layoutViewport()
-        cmdHomeLogger.notice("scrollToBeginningOfDocument after layoutViewport frame=\(self.frame.debugDescription, privacy: .public) viewportRange=\(self.textLayoutManager.textViewportLayoutController.viewportRange.map { NSRange($0, in: self.textContentManager).debugDescription } ?? "nil", privacy: .public)")
         scroll(CGPoint(x: visibleRect.origin.x, y: frame.minY))
-        cmdHomeLogger.notice("scrollToBeginningOfDocument exit frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
     }
 
     override open func scrollToEndOfDocument(_ sender: Any?) {
-        cmdHomeLogger.notice("scrollToEndOfDocument enter frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
         relocateViewport(to: textLayoutManager.documentRange.endLocation)
         layoutViewport()
         updateContentSizeIfNeeded()
         scroll(CGPoint(x: visibleRect.origin.x, y: frame.maxY))
-        cmdHomeLogger.notice("scrollToEndOfDocument exit frame=\(self.frame.debugDescription, privacy: .public) visible=\(self.visibleRect.debugDescription, privacy: .public)")
     }
 }
