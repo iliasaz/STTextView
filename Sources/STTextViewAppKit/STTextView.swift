@@ -1474,12 +1474,27 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
         cmdHomeLogger.notice("setFrameSize old=\(self.frame.size.debugDescription, privacy: .public) new=\(newSize.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) inLayout=\(self.inLayout, privacy: .public)")
         super.setFrameSize(newSize)
 
+        // `super.setFrameSize` can synchronously fire `prepareContent` (when
+        // the new bounds can't contain the clip view's visibleRect), which
+        // may recursively call back into `setFrameSize` with a *different*
+        // size (e.g. updateContentSizeIfNeeded re-growing the frame after a
+        // relocateViewport-driven shrink). In that case `self.frame.size`
+        // here no longer matches our `newSize` parameter — use the current
+        // frame instead, otherwise we'd stomp the recursive call's result
+        // and leave `contentView`/`contentViewportView` clamped to the
+        // intermediate (small) size while the textView itself stays big.
+        // That mismatch clips fragment views to the intermediate height,
+        // which manifested as the Cmd-End → Cmd-Home blanking bug: only
+        // the first 16pt of fragments rendered, because contentViewportView
+        // had been pinned to 16pt while the textView was 7792pt tall.
+        let effectiveSize = frame.size
+
         // contentView should always fill the entire STTextView
         contentView.frame.origin.x = gutterView?.frame.width ?? 0
-        contentView.frame.size = newSize
+        contentView.frame.size = effectiveSize
 
-        updateTextContainerSize(proposedSize: newSize)
-        cmdHomeLogger.notice("setFrameSize after contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentViewCount=\(self.contentViewportView.subviews.count, privacy: .public)")
+        updateTextContainerSize(proposedSize: effectiveSize)
+        cmdHomeLogger.notice("setFrameSize after newSize=\(newSize.debugDescription, privacy: .public) effectiveSize=\(effectiveSize.debugDescription, privacy: .public) contentView=\(self.contentView.frame.debugDescription, privacy: .public) contentViewportView=\(self.contentViewportView.frame.debugDescription, privacy: .public) fragmentViewCount=\(self.contentViewportView.subviews.count, privacy: .public)")
 
         if inLayout {
             needsRelayout = true
