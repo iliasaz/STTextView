@@ -12,12 +12,10 @@ let package = Package(
         )
     ],
     dependencies: [
-        // Use the local sibling so Macintora's project.pbxproj-level local
-        // package reference and this transitive dependency resolve to the
-        // same package identity. Otherwise SwiftPM warns about a conflicting
-        // identity ('github.com/krzyzanowskim/sttextkitplus' vs
-        // '/users/ilia/developer/sttextkitplus').
-        .package(path: "../STTextKitPlus"),
+        // Pinned to iliasaz/STTextKitPlus's `macintora` branch — Macintora
+        // consumes this fork transitively and SwiftPM requires the same
+        // identity for the shared package.
+        .package(url: "https://github.com/iliasaz/STTextKitPlus.git", branch: "macintora"),
         .package(url: "https://github.com/krzyzanowskim/CoreTextSwift", from: "0.2.0")
     ],
     targets: [
