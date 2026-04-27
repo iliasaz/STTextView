@@ -31,11 +31,21 @@ extension STTextView {
         }
 
         if !isInViewport {
+            // `relocateViewport(to:)` shrinks the textView's frame to the
+            // bottom of the relocation anchor's line. When relocating to the
+            // top of the document (e.g. Cmd-Home from the end), that's just
+            // ~one line high — and the immediately-following `layoutViewport()`
+            // would otherwise run against that one-line-tall frame, producing
+            // a viewport range covering only the first fragment. Restore the
+            // full-document frame via `updateContentSizeIfNeeded()` first, so
+            // the subsequent `layoutViewport()` runs against the correct
+            // height and lays out the entire visible area.
             relocateViewport(to: textRange.location)
+            updateContentSizeIfNeeded()
             layoutViewport()
+        } else {
+            updateContentSizeIfNeeded()
         }
-
-        updateContentSizeIfNeeded()
 
         guard var rect = textLayoutManager.textSegmentFrame(in: textRange, type: type) else {
             return false

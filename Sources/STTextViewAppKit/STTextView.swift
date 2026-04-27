@@ -999,8 +999,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func prepareContent(in rect: NSRect) {
-        let oldPreparedContentRect = preparedContentRect
-
         var rect = rect
 
         // Add a modest upward overdraw band so small viewport shifts can stay
@@ -1018,14 +1016,15 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
         super.prepareContent(in: rect)
 
-        if !oldPreparedContentRect.isAlmostEqual(to: preparedContentRect) {
-            // I'm pretty sure there is a TextKit2 issue with the processing layout synchronously.
-            // It behaves as if it is always processed asynchronously in the background, and it can get clogged.
-            // Until the background processing does not finish all the work, the values returned by the API is just bananas.
-            // It automatically fixes itself after a while. I wish the API express how it works.
-            // https://mastodon.social/@krzyzanowskim/115532735501211715
-            layoutViewport()
-        }
+        // Run `layoutViewport()` unconditionally on every prepareContent
+        // invocation, including when `preparedContentRect` doesn't change.
+        // The 50%-upward overdraw above can leave the prepared rect equal
+        // before/after a programmatic scroll between widely separated
+        // regions (e.g. Cmd-End → Cmd-Home on a long doc), but the
+        // *visible* area has changed and the viewport still needs to
+        // re-converge. The convergence loop in `layoutViewport()` is a
+        // no-op when nothing is left to lay out.
+        layoutViewport()
     }
 
     /// The current selection range of the text view.
@@ -1465,11 +1464,18 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     override open func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
 
+        // `super.setFrameSize` can synchronously fire `prepareContent`, which
+        // may recursively call back into `setFrameSize` with a different
+        // size. In that case `self.frame.size` no longer matches `newSize`;
+        // use the current frame so we don't stomp the recursive call's
+        // result and leave `contentView` pinned to the intermediate size.
+        let effectiveSize = frame.size
+
         // contentView should always fill the entire STTextView
         contentView.frame.origin.x = gutterView?.frame.width ?? 0
-        contentView.frame.size = newSize
+        contentView.frame.size = effectiveSize
 
-        updateTextContainerSize(proposedSize: newSize)
+        updateTextContainerSize(proposedSize: effectiveSize)
 
         if inLayout {
             needsRelayout = true
@@ -1478,12 +1484,39 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
     func layoutViewport() {
         // Convergence loop - max 5 iterations
-        // If layout triggers changes that require re-layout, needsRelayout is set
+        //
+        // Two signals can drive another iteration:
+        //   1) `needsRelayout`: code reached during this pass set the flag,
+        //      explicitly asking for another round.
+        //   2) The viewport range is still growing: NSTextViewportLayoutController
+        //      sometimes returns a partial viewport range on the first call
+        //      after a programmatic scroll (e.g. `scrollRangeToVisible`
+        //      triggered by `moveToBeginningOfDocument`), where it only lays
+        //      out the line at the new anchor instead of filling the entire
+        //      visible bounds. A subsequent call against the same state
+        //      extends the range to cover the full bounds. `needsRelayout`
+        //      doesn't catch this because nothing during the partial pass
+        //      sets it. Without this, Cmd-End → Cmd-Home on a long
+        //      word-wrapped document leaves `viewportRange` covering only the
+        //      first line, and the editor renders blank below it. Test
+        //      coverage: `CmdHomeBlankingTests`.
         var iterations = 5
+        var previousRangeLength: Int? = nil
+        let controller = textLayoutManager.textViewportLayoutController
+
         while iterations > 0 {
             needsRelayout = false
-            textLayoutManager.textViewportLayoutController.layoutViewport()
-            if !needsRelayout { break }
+            controller.layoutViewport()
+
+            // Stop only once both: nothing requested another relayout, and
+            // the viewport range is no longer growing.
+            let currentLength = controller.viewportRange.map {
+                NSRange($0, in: textContentManager).length
+            }
+            let rangeStable = (currentLength == previousRangeLength)
+            if !needsRelayout && rangeStable { break }
+
+            previousRangeLength = currentLength
             iterations -= 1
         }
 
@@ -1557,7 +1590,12 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
             setFrameSize(CGSize(width: frame.width, height: lastLineMaxY))
         }
 
-        let offset = frame.height - suggestedAnchor
+        // Compute `offset` from `lastLineMaxY` rather than `frame.height`:
+        // the `setFrameSize` above can re-enter `prepareContent` and grow
+        // the frame back to the full document height before we get here,
+        // which would inflate `offset` to ≈doc-height and `adjustViewport`
+        // would then shift the viewport thousands of points off-screen.
+        let offset = lastLineMaxY - suggestedAnchor
         if !offset.isAlmostZero() {
             textViewportLayoutController.adjustViewport(byVerticalOffset: -offset)
         }
