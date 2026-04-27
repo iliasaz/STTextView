@@ -871,25 +871,7 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
         if let scrollView {
             NotificationCenter.default.addObserver(self, selector: #selector(didLiveScrollNotification(_:)), name: NSScrollView.didLiveScrollNotification, object: scrollView)
-
-            // Observe clip-view bounds changes so STTextView re-runs layout
-            // after every scroll-position change — including programmatic
-            // ones like `scrollRangeToVisible` triggered by selection-driven
-            // moves, and the initial scroll/frame settling that follows
-            // `setString` while the host (e.g. a SwiftUI hosting view) is
-            // still resolving its layout. `didLiveScrollNotification` only
-            // covers user scrolling and doesn't fire here. Without this
-            // observer, layoutViewport()'s convergence loop never re-runs
-            // after the natural display cycle has already passed, leaving
-            // the document with a viewportRange computed against the wrong
-            // frame.
-            scrollView.contentView.postsBoundsChangedNotifications = true
-            NotificationCenter.default.addObserver(self, selector: #selector(clipViewBoundsDidChangeNotification(_:)), name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         }
-    }
-
-    @objc private func clipViewBoundsDidChangeNotification(_ notification: Notification) {
-        setNeedsLayoutSafe()
     }
 
     override open func viewDidMoveToWindow() {
@@ -1017,8 +999,6 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
     }
 
     override open func prepareContent(in rect: NSRect) {
-        let oldPreparedContentRect = preparedContentRect
-
         var rect = rect
 
         // Add a modest upward overdraw band so small viewport shifts can stay
@@ -1036,14 +1016,15 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
         super.prepareContent(in: rect)
 
-        if !oldPreparedContentRect.isAlmostEqual(to: preparedContentRect) {
-            // I'm pretty sure there is a TextKit2 issue with the processing layout synchronously.
-            // It behaves as if it is always processed asynchronously in the background, and it can get clogged.
-            // Until the background processing does not finish all the work, the values returned by the API is just bananas.
-            // It automatically fixes itself after a while. I wish the API express how it works.
-            // https://mastodon.social/@krzyzanowskim/115532735501211715
-            layoutViewport()
-        }
+        // Run `layoutViewport()` unconditionally on every prepareContent
+        // invocation, including when `preparedContentRect` doesn't change.
+        // The 50%-upward overdraw above can leave the prepared rect equal
+        // before/after a programmatic scroll between widely separated
+        // regions (e.g. Cmd-End → Cmd-Home on a long doc), but the
+        // *visible* area has changed and the viewport still needs to
+        // re-converge. The convergence loop in `layoutViewport()` is a
+        // no-op when nothing is left to lay out.
+        layoutViewport()
     }
 
     /// The current selection range of the text view.
