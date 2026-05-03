@@ -194,57 +194,55 @@ extension STTextView {
             }
         }
 
-        // Bypass super.rightMouseDown — NSTextView's implementation internally
-        // reaches into NSSpellChecker on a Default-QoS thread while the main
-        // thread (User-interactive) waits, producing a priority inversion even
-        // when all text-checking features are disabled. Popping the menu
-        // directly is sufficient and avoids the problematic code path.
-        if let contextMenu = menu(for: event) {
-            NSMenu.popUpContextMenu(contextMenu, with: event, for: self)
-        }
+        super.rightMouseDown(with: event)
     }
 
     override open func menu(for event: NSEvent) -> NSMenu? {
-        // Build a baseline editing menu without calling super.menu(for:).
-        // NSTextView.menu(for:) internally calls NSSpellChecker on a Default-QoS
-        // thread while the User-interactive main thread waits, producing a priority
-        // inversion even when all text-checking features are disabled. Items below
-        // use target=nil so the responder chain handles validation automatically.
-        let proposedMenu = NSMenu()
-        proposedMenu.addItem(withTitle: "Cut", action: #selector(cut(_:)), keyEquivalent: "")
-        proposedMenu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
-        proposedMenu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
+        let proposedMenu = super.menu(for: event)?.copy() as? NSMenu
 
         // Disable context menu when adding an insertion point in mouseDown
-        if event.type == .leftMouseDown, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.shift, .control]) {
+        if proposedMenu != nil, event.type == .leftMouseDown, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.shift, .control]) {
             return nil
         }
 
         let point = contentView.convert(event.locationInWindow, from: nil)
-        guard let eventLocation = textLayoutManager.lineFragmentRange(for: point, inContainerAt: textLayoutManager.documentRange.location)?.location,
-              let location = textLayoutManager.textSelectionNavigation.textSelections(interactingAt: point, inContainerAt: eventLocation, anchors: [], modifiers: [], selecting: false, bounds: textLayoutManager.usageBoundsForTextContainer).first?.textRanges.first?.location else {
-            return proposedMenu
-        }
+        if let proposedMenu,
+           let eventLocation = textLayoutManager.lineFragmentRange(for: point, inContainerAt: textLayoutManager.documentRange.location)?.location,
+           let location = textLayoutManager.textSelectionNavigation.textSelections(interactingAt: point, inContainerAt: eventLocation, anchors: [], modifiers: [], selecting: false, bounds: textLayoutManager.usageBoundsForTextContainer).first?.textRanges.first?.location {
 
-        let wantsTextCheckingMenu =
-            isContinuousSpellCheckingEnabled
-            || isGrammarCheckingEnabled
-            || isAutomaticSpellingCorrectionEnabled
-            || isAutomaticTextReplacementEnabled
-        if wantsTextCheckingMenu {
-            var effectiveRange = NSRange()
-            if let textCheckingMenu = textCheckingController.menu(at: NSRange(NSTextRange(location: location), in: textContentManager).location, clickedOnSelection: true, effectiveRange: &effectiveRange) {
-                let items = textCheckingMenu.items
-                for (idx, menuItem) in items.enumerated() {
-                    proposedMenu.insertItem(menuItem.copy() as! NSMenuItem, at: idx)
+            // Insert spell checker menu — only when the host actually
+            // wants spell/grammar/correction features. NSTextCheckingController
+            // reaches into NSSpellChecker which routinely hops to a
+            // default-QoS thread for language NLP; calling it on every
+            // right-click while the user-interactive main thread waits
+            // shows up as "Hang Risk: priority inversion" in Xcode's
+            // runtime diagnostics for hosts (e.g. SQL editors) that
+            // don't need spell-check at all.
+            //
+            // All four flags default to `false` in this fork, so the
+            // common path is to skip the call entirely.
+            let wantsTextCheckingMenu =
+                isContinuousSpellCheckingEnabled
+                || isGrammarCheckingEnabled
+                || isAutomaticSpellingCorrectionEnabled
+                || isAutomaticTextReplacementEnabled
+            if wantsTextCheckingMenu {
+                var effectiveRange = NSRange()
+                if let textCheckingMenu = textCheckingController.menu(at: NSRange(NSTextRange(location: location), in: textContentManager).location, clickedOnSelection: true, effectiveRange: &effectiveRange) {
+                    let items = textCheckingMenu.items
+                    for (idx, menuItem) in items.enumerated() {
+                        proposedMenu.insertItem(menuItem.copy() as! NSMenuItem, at: idx)
+                    }
+                    proposedMenu.insertItem(.separator(), at: items.count)
                 }
-                proposedMenu.insertItem(.separator(), at: items.count)
             }
+
+            let effectiveMenu = delegateProxy.textView(self, menu: proposedMenu, for: event, at: location)
+            effectiveMenu?.addItem(.separator())
+            return effectiveMenu
         }
 
-        let effectiveMenu = delegateProxy.textView(self, menu: proposedMenu, for: event, at: location)
-        effectiveMenu?.addItem(.separator())
-        return effectiveMenu
+        return proposedMenu
     }
 
 }
