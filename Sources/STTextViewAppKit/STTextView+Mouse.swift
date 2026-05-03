@@ -210,8 +210,23 @@ extension STTextView {
            let eventLocation = textLayoutManager.lineFragmentRange(for: point, inContainerAt: textLayoutManager.documentRange.location)?.location,
            let location = textLayoutManager.textSelectionNavigation.textSelections(interactingAt: point, inContainerAt: eventLocation, anchors: [], modifiers: [], selecting: false, bounds: textLayoutManager.usageBoundsForTextContainer).first?.textRanges.first?.location {
 
-            // Insert spell checker menu
-            do {
+            // Insert spell checker menu — only when the host actually
+            // wants spell/grammar/correction features. NSTextCheckingController
+            // reaches into NSSpellChecker which routinely hops to a
+            // default-QoS thread for language NLP; calling it on every
+            // right-click while the user-interactive main thread waits
+            // shows up as "Hang Risk: priority inversion" in Xcode's
+            // runtime diagnostics for hosts (e.g. SQL editors) that
+            // don't need spell-check at all.
+            //
+            // All four flags default to `false` in this fork, so the
+            // common path is to skip the call entirely.
+            let wantsTextCheckingMenu =
+                isContinuousSpellCheckingEnabled
+                || isGrammarCheckingEnabled
+                || isAutomaticSpellingCorrectionEnabled
+                || isAutomaticTextReplacementEnabled
+            if wantsTextCheckingMenu {
                 var effectiveRange = NSRange()
                 if let textCheckingMenu = textCheckingController.menu(at: NSRange(NSTextRange(location: location), in: textContentManager).location, clickedOnSelection: true, effectiveRange: &effectiveRange) {
                     let items = textCheckingMenu.items
