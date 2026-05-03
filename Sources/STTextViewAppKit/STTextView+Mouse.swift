@@ -194,7 +194,14 @@ extension STTextView {
             }
         }
 
-        super.rightMouseDown(with: event)
+        // Bypass super.rightMouseDown — NSTextView's implementation internally
+        // reaches into NSSpellChecker on a Default-QoS thread while the main
+        // thread (User-interactive) waits, producing a priority inversion even
+        // when all text-checking features are disabled. Popping the menu
+        // directly is sufficient and avoids the problematic code path.
+        if let contextMenu = menu(for: event) {
+            NSMenu.popUpContextMenu(contextMenu, with: event, for: self)
+        }
     }
 
     override open func menu(for event: NSEvent) -> NSMenu? {
